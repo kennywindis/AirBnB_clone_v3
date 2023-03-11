@@ -1,74 +1,117 @@
 #!/usr/bin/python3
-""" View for User objects that handles default API actions """
+"""amenities app_view
+"""
 from api.v1.views import app_views
-from flask import jsonify, abort, make_response, request
+from flask import jsonify, abort, request, make_response
 from models import storage
 from models.user import User
-import hashlib
 
 
-@app_views.route('/users', methods=['GET'], strict_slashes=False)
-def users():
-    """ Retrieves the list of all User objects """
-    d_users = storage.all(User)
-    return jsonify([obj.to_dict() for obj in d_users.values()])
-
-
-@app_views.route('/users/<user_id>', methods=['GET'], strict_slashes=False)
-def r_user_id(user_id):
+@app_views.route('/users/', strict_slashes=False,
+                 methods=['GET'])
+def all_users():
+    """list all users
     """
-    file: yml/users_get.yml
+    all_users = []
+    for user in storage.all(User).values():
+        all_users.append(user.to_dict())
+    return make_response(jsonify(all_users))
+
+
+@app_views.route('/users/<user_id>', strict_slashes=False,
+                 methods=['GET'])
+def one_user(user_id):
+    """get user by id
     """
-    user = storage.get("User", user_id)
-    if not user:
-        abort(404)
-    return jsonify(user.to_dict())
+    for value in storage.all(User).values():
+        """ Loop through all users in the storage engine,
+            when we find one with a matching id to the user_id,
+            return it in json format
+        """
+        if value.id == user_id:
+            return make_response(jsonify(value.to_dict()))
+
+    """ abort if nothing was found (404 OBVIOUSLY.) """
+    return abort(404)
 
 
-@app_views.route('/users/<user_id>', methods=['DELETE'],
-                 strict_slashes=False)
-def del_user(user_id):
-    """ Deletes a User object """
-    user = storage.get("User", user_id)
-    if not user:
-        abort(404)
-    user.delete()
-    storage.save()
-    return make_response(jsonify({}), 200)
+@app_views.route('/users/<user_id>', strict_slashes=False,
+                 methods=['DELETE'])
+def delete_user(user_id):
+    """delete user by id
+    """
+
+    """ Loop through all Users in the storage engine,
+        once we find one that matches the given id (user_id),
+        delete it from the engine and .save() the engine to
+        update our changes
+        oh then return 200 to reflect a successful deletion
+    """
+    for value in storage.all(User).values():
+        if value.id == user_id:
+            value.delete()
+            storage.save()
+            return make_response(jsonify({}), 200)
+
+    """ 404 abort if we made it here, nothing was found to delete """
+    return abort(404)
 
 
-@app_views.route('/users', methods=['POST'], strict_slashes=False)
+@app_views.route('/users/', strict_slashes=False,
+                 methods=['POST'])
 def post_user():
-    """ Creates a User object """
-    new_user = request.get_json()
-    if not new_user:
-        abort(400, "Not a JSON")
-    if "email" not in new_user:
-        abort(400, "Missing email")
-    if "password" not in new_user:
-        abort(400, "Missing password")
+    """post new user data
+    """
 
-    user = User(**new_user)
-    storage.new(user)
-    storage.save()
-    return make_response(jsonify(user.to_dict()), 201)
+    data = request.get_json()
+    """ Validates the json is valid """
+    if data is None:
+        return make_response(jsonify(error="Not a JSON"), 400)
+
+    """ Ensures we have the relevent keys (email and password)
+        if we dont have them, yell at the user
+    """
+    if 'email' not in data.keys():
+        return make_response(jsonify(error="Missing email"), 400)
+    if 'password' not in data.keys():
+        return make_response(jsonify(error="Missing password"), 400)
+
+    """ Create a new user and use the given data (email and pass)
+        as the values for the new users.
+        .save() so the storage engine will update these changes
+        then return 201 on success
+    """
+    new_user = User()
+    new_user.email = data.get('email')
+    new_user.password = data.get('password')
+    new_user.save()
+
+    return make_response(jsonify(new_user.to_dict()), 201)
 
 
-@app_views.route('/users/<user_id>', methods=['PUT'], strict_slashes=False)
+@app_views.route('/users/<user_id>', strict_slashes=False,
+                 methods=['PUT'])
 def put_user(user_id):
-    """ Updates a User object """
-    user = storage.get("User", user_id)
-    if not user:
-        abort(404)
+    """update user instance
+    """
 
-    body_request = request.get_json()
-    if not body_request:
-        abort(400, "Not a JSON")
+    data = request.get_json()
+    """ Validate json bs, or yell at user for sending bad data """
+    if data is None:
+        return make_response(jsonify(error="Not a JSON"), 400)
 
-    for k, v in body_request.items():
-        if k not in ['id', 'email', 'created_at', 'updated_at']:
-            setattr(user, k, v)
+    """ ignore keys, holberton wanted this """
+    ignore_keys = ['id', 'email', 'created_at', 'updated_at']
 
-    storage.save()
-    return make_response(jsonify(user.to_dict()), 200)
-
+    """ Find the matching user, and update it accordingly """
+    for value in storage.all(User).values():
+        if value.id == user_id:
+            for k, v in data.items():
+                if k not in ignore_keys and hasattr(User, k):
+                    setattr(value, k, v)
+                    value.save()
+                    return make_response(jsonify(value.to_dict()), 200)
+                else:
+                    return abort(404)
+    """ if we made it here, somethings wack and we didnt find it """
+    return abort(404)
