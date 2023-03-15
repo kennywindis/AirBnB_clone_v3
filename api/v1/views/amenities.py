@@ -11,7 +11,6 @@ from api.v1.views import app_views
 from models import storage
 from models.amenity import Amenity
 
-
 @app_views.route('/amenities', methods=['GET', 'POST'], strict_slashes=False)
 def amenities():
     """Create a new view for Amenity objects that handles all default
