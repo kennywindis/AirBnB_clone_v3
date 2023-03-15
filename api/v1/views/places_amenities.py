@@ -109,4 +109,3 @@ def post_amenity_by_place(place_id, amenity_id):
                     abort(404)
             else:
                 abort(404)
-
